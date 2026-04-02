@@ -1750,6 +1750,9 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		reqStream = v
 	}
 	if promptCacheKey == "" {
+		promptCacheKey = s.ExtractSessionID(c, body)
+	}
+	if promptCacheKey == "" {
 		if v, ok := reqBody["prompt_cache_key"].(string); ok {
 			promptCacheKey = strings.TrimSpace(v)
 		}
@@ -1853,6 +1856,12 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 	}
 
+	autoPromptCacheKeyInjected := false
+	if promptCacheKey == "" && account.Type == AccountTypeOAuth && shouldAutoInjectPromptCacheKeyForCompat(upstreamModel) {
+		promptCacheKey = deriveResponsesPromptCacheKeyFromBody(body, upstreamModel)
+		autoPromptCacheKeyInjected = promptCacheKey != ""
+	}
+
 	if account.Type == AccountTypeOAuth {
 		codexResult := applyCodexOAuthTransform(reqBody, isCodexCLI, isOpenAIResponsesCompactPath(c))
 		if codexResult.Modified {
@@ -1864,7 +1873,18 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 		if codexResult.PromptCacheKey != "" {
 			promptCacheKey = codexResult.PromptCacheKey
+		} else if promptCacheKey != "" {
+			reqBody["prompt_cache_key"] = promptCacheKey
+			bodyModified = true
+			markPatchSet("prompt_cache_key", promptCacheKey)
 		}
+	}
+	if autoPromptCacheKeyInjected {
+		logger.L().Debug("openai responses: stable prompt_cache_key injected",
+			zap.Int64("account_id", account.ID),
+			zap.String("upstream_model", upstreamModel),
+			zap.String("prompt_cache_key_sha256", hashSensitiveValueForLog(promptCacheKey)),
+		)
 	}
 
 	// Handle max_output_tokens based on platform and account type

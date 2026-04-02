@@ -77,3 +77,69 @@ func TestDeriveCompatPromptCacheKey_UsesResolvedSparkFamily(t *testing.T) {
 	require.NotEmpty(t, k1)
 	require.Equal(t, k1, k2, "resolved spark family should derive a stable compat cache key")
 }
+
+func TestDeriveResponsesPromptCacheKey_StableAcrossLaterTurns(t *testing.T) {
+	base := &apicompat.ResponsesRequest{
+		Model:        "gpt-5.4",
+		Instructions: "You are helpful.",
+		Input: mustRawJSON(t, `[
+			{"role":"user","content":[{"type":"input_text","text":"Hello"}]}
+		]`),
+	}
+	extended := &apicompat.ResponsesRequest{
+		Model:        "gpt-5.4",
+		Instructions: "You are helpful.",
+		Input: mustRawJSON(t, `[
+			{"role":"user","content":[{"type":"input_text","text":"Hello"}]},
+			{"role":"assistant","content":[{"type":"output_text","text":"Hi there!"}]},
+			{"role":"user","content":[{"type":"input_text","text":"How are you?"}]}
+		]`),
+	}
+
+	k1 := deriveResponsesPromptCacheKey(base, "gpt-5.4")
+	k2 := deriveResponsesPromptCacheKey(extended, "gpt-5.4")
+	require.Equal(t, k1, k2, "cache key should be stable across later turns")
+	require.NotEmpty(t, k1)
+}
+
+func TestDeriveResponsesPromptCacheKey_DiffersAcrossSessions(t *testing.T) {
+	req1 := &apicompat.ResponsesRequest{
+		Model: "gpt-5.3-codex",
+		Input: mustRawJSON(t, `[
+			{"type":"input_text","text":"Question A"}
+		]`),
+	}
+	req2 := &apicompat.ResponsesRequest{
+		Model: "gpt-5.3-codex",
+		Input: mustRawJSON(t, `[
+			{"type":"input_text","text":"Question B"}
+		]`),
+	}
+
+	k1 := deriveResponsesPromptCacheKey(req1, "gpt-5.3-codex")
+	k2 := deriveResponsesPromptCacheKey(req2, "gpt-5.3-codex")
+	require.NotEqual(t, k1, k2, "different first user inputs should yield different keys")
+}
+
+func TestDeriveResponsesPromptCacheKey_LeadingImplicitUserItemsStayStable(t *testing.T) {
+	base := &apicompat.ResponsesRequest{
+		Model: "gpt-5.3-codex",
+		Input: mustRawJSON(t, `[
+			{"type":"input_text","text":"Hello"},
+			{"type":"input_image","image_url":"data:image/png;base64,AAAA"}
+		]`),
+	}
+	extended := &apicompat.ResponsesRequest{
+		Model: "gpt-5.3-codex",
+		Input: mustRawJSON(t, `[
+			{"type":"input_text","text":"Hello"},
+			{"type":"input_image","image_url":"data:image/png;base64,AAAA"},
+			{"type":"reasoning","encrypted_content":"gAAA"}
+		]`),
+	}
+
+	k1 := deriveResponsesPromptCacheKey(base, "gpt-5.3-codex")
+	k2 := deriveResponsesPromptCacheKey(extended, "openai/gpt-5.3-codex")
+	require.NotEmpty(t, k1)
+	require.Equal(t, k1, k2, "implicit leading user items should remain stable when later non-user items are appended")
+}

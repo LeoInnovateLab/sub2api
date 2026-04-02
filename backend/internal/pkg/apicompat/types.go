@@ -153,6 +153,7 @@ type AnthropicDelta struct {
 type ResponsesRequest struct {
 	Model           string              `json:"model"`
 	Input           json.RawMessage     `json:"input"` // string or []ResponsesInputItem
+	Instructions    string              `json:"instructions,omitempty"`
 	MaxOutputTokens *int                `json:"max_output_tokens,omitempty"`
 	Temperature     *float64            `json:"temperature,omitempty"`
 	TopP            *float64            `json:"top_p,omitempty"`
