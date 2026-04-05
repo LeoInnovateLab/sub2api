@@ -11,8 +11,8 @@ const compatPromptCacheKeyPrefix = "compat_cc_"
 const responsesPromptCacheKeyPrefix = "compat_rsp_"
 
 func shouldAutoInjectPromptCacheKeyForCompat(model string) bool {
-	switch resolveOpenAIUpstreamModel(strings.TrimSpace(model)) {
-	case "gpt-5.4", "gpt-5.3-codex", "gpt-5.3-codex-spark":
+	switch normalizeCodexModel(strings.TrimSpace(model)) {
+	case "gpt-5.4", "gpt-5.3-codex":
 		return true
 	default:
 		return false
@@ -24,9 +24,9 @@ func deriveCompatPromptCacheKey(req *apicompat.ChatCompletionsRequest, mappedMod
 		return ""
 	}
 
-	normalizedModel := resolveOpenAIUpstreamModel(strings.TrimSpace(mappedModel))
+	normalizedModel := normalizeCodexModel(strings.TrimSpace(mappedModel))
 	if normalizedModel == "" {
-		normalizedModel = resolveOpenAIUpstreamModel(strings.TrimSpace(req.Model))
+		normalizedModel = normalizeCodexModel(strings.TrimSpace(req.Model))
 	}
 	if normalizedModel == "" {
 		normalizedModel = strings.TrimSpace(req.Model)
